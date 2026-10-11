@@ -1,0 +1,196 @@
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
+import {
+  DEFAULT_HERO_METRICS, DEFAULT_IMAGES, DEFAULT_NAV, DEFAULT_TEXTS,
+  ClientLogo, HeroMetric, NavItem, SiteImages,
+} from '../lib/defaults';
+import {
+  AD_CAMPAIGNS_DATA, CLIENT_LOGOS, INITIAL_PORTFOLIO_INFO, PROJECTS_DATA, WORK_EXPERIENCE_DATA,
+} from '../data/portfolioData';
+import { AdCampaignItem, ExperienceItem, PortfolioInfo, ProjectItem, TicketItem } from '../types';
+
+type Settings = {
+  info: PortfolioInfo;
+  nav: NavItem[];
+  texts: Record<string, string>;
+  hero_metrics: HeroMetric[];
+  clients: ClientLogo[];
+  images: SiteImages;
+};
+type Collections = {
+  projects: ProjectItem[];
+  ad_campaigns: AdCampaignItem[];
+  experience: ExperienceItem[];
+};
+export type SettingKey = keyof Settings;
+export type CollectionName = keyof Collections;
+
+const DEFAULT_SETTINGS: Settings = {
+  info: INITIAL_PORTFOLIO_INFO,
+  nav: DEFAULT_NAV,
+  texts: DEFAULT_TEXTS,
+  hero_metrics: DEFAULT_HERO_METRICS,
+  clients: CLIENT_LOGOS.map((c, i) => ({ id: `c${i}`, ...c })),
+  images: DEFAULT_IMAGES,
+};
+const DEFAULT_COLLECTIONS: Collections = {
+  projects: PROJECTS_DATA,
+  ad_campaigns: AD_CAMPAIGNS_DATA,
+  experience: WORK_EXPERIENCE_DATA,
+};
+
+interface ContentValue {
+  ready: boolean;
+  backendConnected: boolean;
+  settings: Settings;
+  collections: Collections;
+  tickets: TicketItem[];
+  session: Session | null;
+  /** t('hero.ctaPrimary') → editable text with built-in fallback */
+  t: (key: string) => string;
+  saveSetting: <K extends SettingKey>(key: K, value: Settings[K]) => Promise<void>;
+  saveCollection: <K extends CollectionName>(name: K, items: Collections[K]) => Promise<void>;
+  addTicket: (t: TicketItem) => Promise<void>;
+  updateTicketStatus: (ref: string, status: TicketItem['status']) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<string | null>;
+  signOut: () => Promise<void>;
+}
+
+const Ctx = createContext<ContentValue | null>(null);
+
+export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [collections, setCollections] = useState<Collections>(DEFAULT_COLLECTIONS);
+  const [tickets, setTickets] = useState<TicketItem[]>([]);
+  const [session, setSession] = useState<Session | null>(null);
+  const [ready, setReady] = useState(!supabase);
+
+  // ---- initial load (public data) ----
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [content, projects, campaigns, experience] = await Promise.all([
+          supabase.from('site_content').select('key,value'),
+          supabase.from('projects').select('data').order('sort_order'),
+          supabase.from('ad_campaigns').select('data').order('sort_order'),
+          supabase.from('experience').select('data').order('sort_order'),
+        ]);
+        if (cancelled) return;
+
+        const next: Settings = { ...DEFAULT_SETTINGS };
+        (content.data ?? []).forEach((row: { key: string; value: any }) => {
+          if (row.key === 'texts') next.texts = { ...DEFAULT_TEXTS, ...row.value };
+          else if (row.key === 'info') next.info = { ...INITIAL_PORTFOLIO_INFO, ...row.value };
+          else if (row.key === 'images') next.images = { ...DEFAULT_IMAGES, ...row.value };
+          else if (row.key in next) (next as any)[row.key] = row.value;
+        });
+        setSettings(next);
+
+        // Empty table = not seeded yet → keep the built-in defaults.
+        const pick = <T,>(res: { data: { data: T }[] | null }, fb: T[]) =>
+          res.data && res.data.length ? res.data.map((r) => r.data) : fb;
+        setCollections({
+          projects: pick<ProjectItem>(projects as any, PROJECTS_DATA),
+          ad_campaigns: pick<AdCampaignItem>(campaigns as any, AD_CAMPAIGNS_DATA),
+          experience: pick<ExperienceItem>(experience as any, WORK_EXPERIENCE_DATA),
+        });
+      } catch (e) {
+        console.warn('Backend unreachable, using built-in content', e);
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ---- admin session ----
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // ---- tickets only load for the logged-in admin (RLS blocks everyone else) ----
+  useEffect(() => {
+    if (!supabase || !session) { setTickets([]); return; }
+    supabase.from('tickets').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+      setTickets((data ?? []).map((r: any) => ({
+        id: r.ref, clientName: r.client_name, clientEmail: r.client_email, service: r.service,
+        budget: r.budget, message: r.message, status: r.status, date: String(r.created_at).slice(0, 10),
+      })));
+    });
+  }, [session]);
+
+  // ---- browser tab title / description from editable texts ----
+  useEffect(() => {
+    document.title = settings.texts['seo.title'] || document.title;
+    document.querySelector('meta[name="description"]')
+      ?.setAttribute('content', settings.texts['seo.description'] || '');
+  }, [settings.texts]);
+
+  const saveSetting = useCallback<ContentValue['saveSetting']>(async (key, value) => {
+    if (!supabase) throw new Error('Supabase is not configured');
+    const { error } = await supabase.from('site_content')
+      .upsert({ key, value, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    setSettings((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const saveCollection = useCallback<ContentValue['saveCollection']>(async (name, items) => {
+    if (!supabase) throw new Error('Supabase is not configured');
+    const rows = (items as any[]).map((d, i) => ({ id: d.id, sort_order: i, data: d }));
+    if (rows.length) {
+      const { error } = await supabase.from(name).upsert(rows);
+      if (error) throw error;
+    }
+    // delete rows the admin removed
+    const del = supabase.from(name).delete();
+    const { error: delErr } = rows.length
+      ? await del.not('id', 'in', `(${rows.map((r) => `"${r.id}"`).join(',')})`)
+      : await del.neq('id', '');
+    if (delErr) throw delErr;
+    setCollections((prev) => ({ ...prev, [name]: items }));
+  }, []);
+
+  const addTicket = useCallback(async (t: TicketItem) => {
+    if (supabase) {
+      // No .select() here: visitors may insert but are not allowed to read rows back.
+      await supabase.from('tickets').insert({
+        ref: t.id, client_name: t.clientName, client_email: t.clientEmail,
+        service: t.service ?? null, budget: t.budget ?? null, message: t.message, status: 'New',
+      });
+    }
+    setTickets((prev) => (session ? [t, ...prev] : prev));
+  }, [session]);
+
+  const updateTicketStatus = useCallback(async (ref: string, status: TicketItem['status']) => {
+    if (supabase) await supabase.from('tickets').update({ status }).eq('ref', ref);
+    setTickets((prev) => prev.map((t) => (t.id === ref ? { ...t, status } : t)));
+  }, []);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    if (!supabase) return 'Backend is not configured (missing env variables).';
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return error ? error.message : null;
+  }, []);
+  const signOut = useCallback(async () => { await supabase?.auth.signOut(); }, []);
+
+  const t = useCallback((key: string) => settings.texts[key] ?? DEFAULT_TEXTS[key] ?? key, [settings.texts]);
+
+  const value = useMemo<ContentValue>(() => ({
+    ready, backendConnected: !!supabase, settings, collections, tickets, session, t,
+    saveSetting, saveCollection, addTicket, updateTicketStatus, signIn, signOut,
+  }), [ready, settings, collections, tickets, session, t, saveSetting, saveCollection, addTicket, updateTicketStatus, signIn, signOut]);
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+};
+
+export const useContent = () => {
+  const v = useContext(Ctx);
+  if (!v) throw new Error('useContent must be used inside <ContentProvider>');
+  return v;
+};
