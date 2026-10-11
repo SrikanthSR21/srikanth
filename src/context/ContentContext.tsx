@@ -2,13 +2,13 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import {
-  DEFAULT_HERO_METRICS, DEFAULT_IMAGES, DEFAULT_NAV, DEFAULT_TEXTS,
+  DEFAULT_HERO_METRICS, DEFAULT_IMAGES, DEFAULT_NAV, DEFAULT_TEXTS, DEFAULT_THEME,
   ClientLogo, HeroMetric, NavItem, SiteImages,
 } from '../lib/defaults';
 import {
   AD_CAMPAIGNS_DATA, CLIENT_LOGOS, INITIAL_PORTFOLIO_INFO, PROJECTS_DATA, WORK_EXPERIENCE_DATA,
 } from '../data/portfolioData';
-import { AdCampaignItem, ExperienceItem, PortfolioInfo, ProjectItem, TicketItem } from '../types';
+import { AdCampaignItem, ExperienceItem, PortfolioInfo, ProjectItem, ThemeSettings, TicketItem } from '../types';
 
 type Settings = {
   info: PortfolioInfo;
@@ -17,6 +17,7 @@ type Settings = {
   hero_metrics: HeroMetric[];
   clients: ClientLogo[];
   images: SiteImages;
+  theme: ThemeSettings;
 };
 type Collections = {
   projects: ProjectItem[];
@@ -33,6 +34,7 @@ const DEFAULT_SETTINGS: Settings = {
   hero_metrics: DEFAULT_HERO_METRICS,
   clients: CLIENT_LOGOS.map((c, i) => ({ id: `c${i}`, ...c })),
   images: DEFAULT_IMAGES,
+  theme: DEFAULT_THEME,
 };
 const DEFAULT_COLLECTIONS: Collections = {
   projects: PROJECTS_DATA,
@@ -60,34 +62,38 @@ interface ContentValue {
 const Ctx = createContext<ContentValue | null>(null);
 
 export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<Settings>(() => {
+    try {
+      const cached = localStorage.getItem('site_theme_cache');
+      return cached ? { ...DEFAULT_SETTINGS, theme: { ...DEFAULT_THEME, ...JSON.parse(cached) } } : DEFAULT_SETTINGS;
+    } catch { return DEFAULT_SETTINGS; }
+  });
   const [collections, setCollections] = useState<Collections>(DEFAULT_COLLECTIONS);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(!supabase);
 
-  // ---- initial load (public data) ----
-  useEffect(() => {
+  // ---- load public data (initial, on realtime change, and when the tab regains focus) ----
+  const load = useCallback(async () => {
     if (!supabase) return;
-    let cancelled = false;
-    (async () => {
-      try {
+    try {
         const [content, projects, campaigns, experience] = await Promise.all([
           supabase.from('site_content').select('key,value'),
           supabase.from('projects').select('data').order('sort_order'),
           supabase.from('ad_campaigns').select('data').order('sort_order'),
           supabase.from('experience').select('data').order('sort_order'),
         ]);
-        if (cancelled) return;
 
         const next: Settings = { ...DEFAULT_SETTINGS };
         (content.data ?? []).forEach((row: { key: string; value: any }) => {
           if (row.key === 'texts') next.texts = { ...DEFAULT_TEXTS, ...row.value };
           else if (row.key === 'info') next.info = { ...INITIAL_PORTFOLIO_INFO, ...row.value };
           else if (row.key === 'images') next.images = { ...DEFAULT_IMAGES, ...row.value };
+          else if (row.key === 'theme') next.theme = { ...DEFAULT_THEME, ...row.value };
           else if (row.key in next) (next as any)[row.key] = row.value;
         });
         setSettings(next);
+        try { localStorage.setItem('site_theme_cache', JSON.stringify(next.theme)); } catch { /* ignore */ }
 
         // Empty table = not seeded yet → keep the built-in defaults.
         const pick = <T,>(res: { data: { data: T }[] | null }, fb: T[]) =>
@@ -97,14 +103,35 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
           ad_campaigns: pick<AdCampaignItem>(campaigns as any, AD_CAMPAIGNS_DATA),
           experience: pick<ExperienceItem>(experience as any, WORK_EXPERIENCE_DATA),
         });
-      } catch (e) {
-        console.warn('Backend unreachable, using built-in content', e);
-      } finally {
-        if (!cancelled) setReady(true);
-      }
-    })();
-    return () => { cancelled = true; };
+    } catch (e) {
+      console.warn('Backend unreachable, using built-in content', e);
+    } finally {
+      setReady(true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    load();
+
+    // Live updates: any admin change is pushed to every open visitor tab.
+    let timer: ReturnType<typeof setTimeout>;
+    const debounced = () => { clearTimeout(timer); timer = setTimeout(load, 300); };
+    let channel = supabase.channel('site-live');
+    ['site_content', 'projects', 'ad_campaigns', 'experience'].forEach((table) => {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, debounced);
+    });
+    channel.subscribe();
+
+    // Safety net if realtime isn't enabled: refresh when the visitor returns to the tab.
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      supabase?.removeChannel(channel);
+    };
+  }, [load]);
 
   // ---- admin session ----
   useEffect(() => {

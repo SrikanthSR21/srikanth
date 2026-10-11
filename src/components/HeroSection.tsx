@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { HeroAnimationMode, FontPairOption } from '../types';
-import { ArrowDown, Code2, Grid, Circle, FileText, ArrowRight } from 'lucide-react';
+import { ArrowDown, FileText, ArrowRight } from 'lucide-react';
 import { useContent } from '../context/ContentContext';
 
 interface HeroSectionProps {
@@ -21,7 +21,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   realName,
 }) => {
   const { settings, t } = useContent();
-  const [animationMode, setAnimationMode] = useState<HeroAnimationMode>(initialMode);
+  const animationMode: HeroAnimationMode = initialMode; // chosen in /admin → Appearance
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -129,47 +129,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
           </div>
         )}
-      </div>
-
-      {/* Animation Mode Switcher Badge (Top Right of Hero) */}
-      <div className="absolute top-6 right-6 z-20 flex items-center gap-1 p-1 bg-zinc-950/90 border border-white/15 rounded-xl text-xs backdrop-blur-md">
-        <span className="text-[10px] uppercase font-mono-code text-zinc-500 px-2">{t('hero.animLabel')}</span>
-        <button
-          onClick={() => setAnimationMode('grid')}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-            animationMode === 'grid'
-              ? 'bg-white text-black font-semibold'
-              : 'text-zinc-400 hover:text-white'
-          }`}
-          title="Interactive Abstract Grid"
-        >
-          <Grid className="w-3 h-3" />
-          <span className="hidden sm:inline">{t('hero.animGrid')}</span>
-        </button>
-        <button
-          onClick={() => setAnimationMode('waterfall')}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-            animationMode === 'waterfall'
-              ? 'bg-white text-black font-semibold'
-              : 'text-zinc-400 hover:text-white'
-          }`}
-          title="Matrix Text Digital Flow"
-        >
-          <Code2 className="w-3 h-3" />
-          <span className="hidden sm:inline">{t('hero.animCode')}</span>
-        </button>
-        <button
-          onClick={() => setAnimationMode('circles')}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-            animationMode === 'circles'
-              ? 'bg-white text-black font-semibold'
-              : 'text-zinc-400 hover:text-white'
-          }`}
-          title="Minimalist Pulsing Outline Circles"
-        >
-          <Circle className="w-3 h-3" />
-          <span className="hidden sm:inline">{t('hero.animPulse')}</span>
-        </button>
       </div>
 
       {/* Main Hero Content */}

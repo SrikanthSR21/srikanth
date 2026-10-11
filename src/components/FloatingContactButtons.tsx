@@ -6,6 +6,7 @@ interface FloatingContactButtonsProps {
   email: string;
   phone: string;
   linkedin: string;
+  instagram?: string;
 }
 
 export const FloatingContactButtons: React.FC<FloatingContactButtonsProps> = ({
@@ -13,7 +14,9 @@ export const FloatingContactButtons: React.FC<FloatingContactButtonsProps> = ({
   email,
   phone,
   linkedin,
+  instagram,
 }) => {
+  const abs = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`);
   const cleanPhone = whatsappNumber.replace(/[^0-9]/g, '');
 
   const items = [
@@ -28,13 +31,13 @@ export const FloatingContactButtons: React.FC<FloatingContactButtonsProps> = ({
     {
       name: 'Instagram',
       icon: Instagram,
-      href: 'https://instagram.com',
+      href: abs(instagram || 'instagram.com'),
       label: 'Instagram',
     },
     {
       name: 'LinkedIn',
       icon: Linkedin,
-      href: `https://${linkedin}`,
+      href: abs(linkedin),
       label: 'LinkedIn Profile',
     },
     {

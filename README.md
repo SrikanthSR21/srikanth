@@ -62,3 +62,21 @@ src/
 - The old `admin123` passcode lived in the browser bundle (anyone could read it). It's gone; login is now Supabase Auth.
 - Write access is enforced in the database (`is_admin()` + RLS), not in the UI.
 - The anon key is public by design. **Never** put the `service_role` key in this project.
+
+
+---
+## v2 — Public site vs `/admin`
+- **Public site (`/`)**: no Type / True Black / Admin buttons, no animation switcher, no admin link in the footer.
+  Theme, typography and hero animation are read from the database (`site_content.theme`).
+- **Admin (`/admin`)**: login form → dashboard with 4 tabs
+  - *Appearance*: theme (True Black / Midnight / Custom colours), typography pair, hero animation (Grid / Code / Pulse)
+  - *Hero, Contact & Social*: hero heading + sub-text, real name, email, phone, WhatsApp, Instagram, LinkedIn, bio, skills, education, CV upload
+  - *Site Content*: navigation (add/edit/reorder/hide), texts, hero stats, projects, ad campaigns, experience, brand ticker, portrait
+  - *Inbox*: contact-form messages
+- Every change saves instantly. Open visitor tabs update live once you run `supabase/migration-002-realtime.sql` once;
+  otherwise visitors see changes on their next refresh or when they return to the tab.
+- `/admin` is loaded as a separate JS chunk (visitors never download it) and is marked `noindex`.
+
+## Environment variables (Vercel)
+Only two are needed: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. There is no `ADMIN_SECRET_KEY` / `DATABASE_URL`:
+this is a static site, and anything secret placed in a `VITE_` variable would be public. Admin identity lives in Supabase Auth + the `is_admin()` rule.

@@ -1,11 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  BackgroundTheme,
-  FontPairOption,
-  ThemeSettings,
-  PortfolioInfo,
-  TicketItem,
-} from './types';
+import { TicketItem } from './types';
 import { FONT_PAIRS } from './data/portfolioData';
 import { useContent } from './context/ContentContext';
 
@@ -17,79 +11,35 @@ import { AdvertisingPortfolio } from './components/AdvertisingPortfolio';
 import { BrandingSection } from './components/BrandingSection';
 import { ContactSection } from './components/ContactSection';
 import { FloatingContactButtons } from './components/FloatingContactButtons';
-import { AdminPanelModal } from './components/AdminPanelModal';
 import { ResumeModal } from './components/ResumeModal';
 
 export default function App() {
-  // Theme Settings
-  const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => {
-    const saved = localStorage.getItem('bw_portfolio_theme');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // fallback
-      }
-    }
-    return {
-      backgroundMode: 'true-black',
-      customBg: '#000000',
-      customText: '#ffffff',
-      customAccent: '#ffffff',
-      fontPairId: 'anton-jakarta',
-      heroAnimation: 'grid',
-    };
-  });
-
-  // Active Typography Pairing
-  const [currentFontPair, setCurrentFontPair] = useState<FontPairOption>(() => {
-    const match = FONT_PAIRS.find((f) => f.id === themeSettings.fontPairId);
-    return match || FONT_PAIRS[0];
-  });
-
-  // Content now comes from the cloud database (with built-in fallbacks)
-  const { settings, collections, tickets, addTicket, updateTicketStatus, saveSetting, t } = useContent();
+  // Everything below is driven by the database (managed at /admin); visitors have no controls.
+  const { settings, collections, addTicket, t } = useContent();
+  const themeSettings = settings.theme;
+  const currentFontPair = FONT_PAIRS.find((f) => f.id === themeSettings.fontPairId) || FONT_PAIRS[0];
   const portfolioInfo = settings.info;
-  const setPortfolioInfo = (info: PortfolioInfo) => { saveSetting('info', info).catch((e) => alert(e.message)); };
 
-  // Modals
-  const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [resumeModalOpen, setResumeModalOpen] = useState(false);
 
-  // Sync Theme to Root CSS Variables & LocalStorage
+  // If a CV file was uploaded in /admin, open it; otherwise show the built-in printable CV.
+  const openResume = () => {
+    if (portfolioInfo.resumeUrl) window.open(portfolioInfo.resumeUrl, '_blank', 'noopener,noreferrer');
+    else setResumeModalOpen(true);
+  };
+
+  // Sync theme to root CSS variables
   useEffect(() => {
     const root = document.documentElement;
     let bg = '#000000';
-    if (themeSettings.backgroundMode === 'midnight-black') {
-      bg = '#0a0b0e';
-    } else if (themeSettings.backgroundMode === 'custom') {
-      bg = themeSettings.customBg || '#000000';
-    }
-
+    if (themeSettings.backgroundMode === 'midnight-black') bg = '#0a0b0e';
+    else if (themeSettings.backgroundMode === 'custom') bg = themeSettings.customBg || '#000000';
     root.style.setProperty('--bg-color', bg);
     root.style.setProperty('--text-color', themeSettings.customText || '#ffffff');
     root.style.setProperty('--accent-btn', themeSettings.customAccent || '#ffffff');
-
-    localStorage.setItem('bw_portfolio_theme', JSON.stringify(themeSettings));
   }, [themeSettings]);
 
-  const handleThemeModeChange = (mode: BackgroundTheme) => {
-    setThemeSettings((prev) => ({
-      ...prev,
-      backgroundMode: mode,
-      customBg: mode === 'true-black' ? '#000000' : '#0a0b0e',
-    }));
-  };
-
-  const handleFontPairChange = (fp: FontPairOption) => {
-    setCurrentFontPair(fp);
-    setThemeSettings((prev) => ({ ...prev, fontPairId: fp.id }));
-  };
-
   const handleAddTicket = (newTicket: TicketItem) => { addTicket(newTicket); };
-  const handleUpdateTicketStatus = (ticketId: string, newStatus: TicketItem['status']) => {
-    updateTicketStatus(ticketId, newStatus);
-  };
 
   return (
     <div
@@ -106,12 +56,8 @@ export default function App() {
     >
       {/* 1. Navbar adhering to Top Bar Contract */}
       <Navbar
-        currentTheme={themeSettings.backgroundMode}
-        onThemeChange={handleThemeModeChange}
         currentFontPair={currentFontPair}
-        onFontPairChange={handleFontPairChange}
-        onOpenAdmin={() => setAdminModalOpen(true)}
-        onOpenResume={() => setResumeModalOpen(true)}
+        onOpenResume={openResume}
         personaName={portfolioInfo.personaName}
       />
 
@@ -121,7 +67,7 @@ export default function App() {
         subheadline={portfolioInfo.roleTitle}
         fontPair={currentFontPair}
         initialMode={themeSettings.heroAnimation}
-        onOpenResume={() => setResumeModalOpen(true)}
+        onOpenResume={openResume}
         realName={portfolioInfo.realName}
       />
 
@@ -129,7 +75,7 @@ export default function App() {
       <AboutSection
         info={portfolioInfo}
         fontPair={currentFontPair}
-        onOpenResume={() => setResumeModalOpen(true)}
+        onOpenResume={openResume}
       />
 
       {/* 4. Section 3: Project Portfolio (The 'Live Card' Gallery) */}
@@ -176,14 +122,7 @@ export default function App() {
             </a>
             <span>·</span>
             <button
-              onClick={() => setAdminModalOpen(true)}
-              className="hover:text-white transition-colors cursor-pointer"
-            >
-              {t('footer.admin')}
-            </button>
-            <span>·</span>
-            <button
-              onClick={() => setResumeModalOpen(true)}
+              onClick={openResume}
               className="hover:text-white transition-colors cursor-pointer"
             >
               {t('footer.cv')}
@@ -198,22 +137,9 @@ export default function App() {
         email={portfolioInfo.email}
         phone={portfolioInfo.phone}
         linkedin={portfolioInfo.linkedin}
+        instagram={portfolioInfo.instagram}
       />
 
-      {/* 10. Section 8: Developer & Admin Dashboard Modal */}
-      <AdminPanelModal
-        isOpen={adminModalOpen}
-        onClose={() => setAdminModalOpen(false)}
-        tickets={tickets}
-        onUpdateTicketStatus={handleUpdateTicketStatus}
-        onAddTicket={handleAddTicket}
-        info={portfolioInfo}
-        onUpdateInfo={setPortfolioInfo}
-        themeSettings={themeSettings}
-        onUpdateTheme={(upd) => setThemeSettings((prev) => ({ ...prev, ...upd }))}
-        fontPair={currentFontPair}
-        onUpdateFontPair={handleFontPairChange}
-      />
 
       {/* 11. Fullscreen Printable Resume CV Modal */}
       <ResumeModal

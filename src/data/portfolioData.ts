@@ -62,6 +62,8 @@ export const INITIAL_PORTFOLIO_INFO: PortfolioInfo = {
   whatsapp: '+91 78250 25164',
   linkedin: 'linkedin.com/in/srsrikanth',
   githubPortfolioUrl: 'srikanthsr21.github.io/digital-marketing-portfolio',
+  instagram: 'https://instagram.com',
+  resumeUrl: '',
   aboutBio:
     'Creative and results-driven Digital Marketing Executive & Developer with hands-on experience orchestrating multi-channel social growth (Instagram, Facebook, LinkedIn), Meta & Google Ads conversion architectures, and high-performance web storefronts. Spearheaded in-house brand rollouts for CyberBix Technologies (Orderbix, Storebix, 6thLoom), grew brand followings by 5,000+ via single viral giveaway campaigns, and ranked 4 client websites to top Google search rankings. Combines a Master of Arts in English with strong analytical copywriting and Python/Django technical acumen.',
   skills: [

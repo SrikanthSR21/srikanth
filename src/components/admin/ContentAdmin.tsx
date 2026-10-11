@@ -82,6 +82,7 @@ export const ContentAdmin: React.FC = () => {
       await c.saveSetting('texts', c.settings.texts);
       await c.saveSetting('hero_metrics', c.settings.hero_metrics);
       await c.saveSetting('clients', c.settings.clients);
+      await c.saveSetting('theme', c.settings.theme);
       const profile = await toCloud(c.settings.images.profile || profileFallback, 'profile');
       await c.saveSetting('images', { ...c.settings.images, profile: profile || '' });
       setMsg('Done ✓ — everything is now stored in Supabase and editable.');

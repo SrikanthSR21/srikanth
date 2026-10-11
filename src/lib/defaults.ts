@@ -1,6 +1,8 @@
 // Every string that used to be hard-coded in JSX now has a default here.
 // The database overrides these; if the DB is empty/unreachable the site looks exactly as before.
 
+import type { ThemeSettings } from '../types';
+
 export interface NavItem {
   id: string;
   label: string;
@@ -30,6 +32,15 @@ export const DEFAULT_HERO_METRICS: HeroMetric[] = [
   { id: 'm4', value: '3 Brands', label: 'CyberBix In-House GTM' },
 ];
 
+export const DEFAULT_THEME: ThemeSettings = {
+  backgroundMode: 'true-black',
+  customBg: '#000000',
+  customText: '#ffffff',
+  customAccent: '#ffffff',
+  fontPairId: 'anton-jakarta',
+  heroAnimation: 'grid',
+};
+
 export const DEFAULT_IMAGES: SiteImages = { profile: '' }; // '' = use the bundled portrait
 
 // Flat key → text map. Add a key here + use t('key') in a component and it appears in the admin automatically.
@@ -37,15 +48,7 @@ export const DEFAULT_TEXTS: Record<string, string> = {
   'seo.title': 'Morgan Maxwell | Creative Developer & Ads Strategist Portfolio',
   'seo.description': 'Portfolio featuring live project cards, advertising case studies, branding and direct WhatsApp routing.',
 
-  'nav.type': 'Type',
-  'nav.trueBlack': 'True Black',
-  'nav.midnight': 'Midnight',
-  'nav.admin': 'Admin',
 
-  'hero.animLabel': 'Anim:',
-  'hero.animGrid': 'Grid',
-  'hero.animCode': 'Code',
-  'hero.animPulse': 'Pulse',
   'hero.eyebrow': 'PORTFOLIO 2026',
   'hero.viewAsReal': 'View as: Srikanth SR',
   'hero.viewAsPersona': 'View as: Morgan Maxwell',
@@ -68,6 +71,5 @@ export const DEFAULT_TEXTS: Record<string, string> = {
 
   'footer.arch': '2026 ARCHITECTURE',
   'footer.top': 'BACK TO TOP',
-  'footer.admin': 'ADMIN DASHBOARD',
   'footer.cv': 'VIEW CV',
 };

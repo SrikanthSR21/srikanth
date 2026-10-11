@@ -84,6 +84,8 @@ export interface PortfolioInfo {
   whatsapp: string;
   linkedin: string;
   githubPortfolioUrl: string;
+  instagram?: string;
+  resumeUrl?: string;
   aboutBio: string;
   skills: {
     category: string;
